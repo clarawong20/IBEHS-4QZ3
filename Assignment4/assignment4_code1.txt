@@ -1,0 +1,109 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
+train_path = 'assignment4_data/train/'
+
+# load training data
+X_train = pd.read_csv(train_path + 'X_train.txt', delim_whitespace=True, header=None)
+y_train = pd.read_csv(train_path + 'y_train.txt', delim_whitespace=True, header=None)
+subject_train = pd.read_csv(train_path + 'subject_train.txt', delim_whitespace=True, header=None)
+
+activity_labels = pd.read_csv('assignment4_data/activity_labels.txt', delim_whitespace=True, header=None, index_col=0)
+activity_labels_dict = activity_labels[1].to_dict()
+
+# exclude lying for simplicity
+exclude_laying = y_train[0] != 6
+X_train = X_train.loc[exclude_laying].reset_index(drop=True)
+y_train = y_train.loc[exclude_laying].reset_index(drop=True)
+subject_train = subject_train.loc[exclude_laying].reset_index(drop=True)
+
+# standardize features
+scalar = StandardScaler()
+
+# fit and transform the training data
+X_train_scaled = scalar.fit_transform(X_train)
+
+
+def compute_features(acc_x, acc_y, acc_z):
+    features = pd.DataFrame()
+
+    # Mean
+    features['mean_x'] = np.mean(acc_x)
+    features['mean_y'] = np.mean(acc_y)
+    features['mean_z'] = np.mean(acc_z)
+    
+    # Variance
+    features['var_x'] = np.var(acc_x)
+    features['var_y'] = np.var(acc_y)
+    features['var_z'] = np.var(acc_z)
+    
+    # Signal Magnitude Area (SMA)
+    features['sma'] = np.mean(np.abs(acc_x) + np.abs(acc_y) + np.abs(acc_z))
+    
+    # Custom Feature: Peak to peak mangitude
+    mag = np.sqrt(acc_x**2 + acc_y**2 + acc_z**2)
+    features['peak_to_peak'] = np.max(mag, axis=1) - np.min(mag, axis=1)
+
+    # FFT Energy
+    fft_x = np.fft.fft(acc_x, axis=1)
+    fft_y = np.fft.fft(acc_y, axis=1)
+    fft_z = np.fft.fft(acc_z, axis=1)
+    
+    # Compute energy per axis (get magnitude of each complex FFT coefficient)
+    energy_x = np.sum(np.abs(fft_x)**2, axis=1)
+    energy_y = np.sum(np.abs(fft_y)**2, axis=1)
+    energy_z = np.sum(np.abs(fft_z)**2, axis=1)
+    
+    features['fft'] = energy_x + energy_y + energy_z
+    
+    selected_features = features[['mean_x', 'var_y', 'sma', 'peak_to_peak', 'fft']]
+    
+    return selected_features
+
+
+
+from sklearn.svm import SVC
+
+svm_model = SVC(kernel='rbf', C=1.0, gamma='scale')
+
+# train the SVM
+svm_model.fit(X_train_scaled, y_train)
+
+
+
+
+
+from sklearn.metrics import classification_report, confusion_matrix
+
+# load testing data
+test_path = 'assignment4_data/test/'
+X_test = pd.read_csv(test_path + 'X_test.txt', delim_whitespace=True, header=None)
+y_test = pd.read_csv(test_path + 'y_test.txt', delim_whitespace=True, header=None)
+subject_test = pd.read_csv(test_path + 'subject_test.txt', delim_whitespace=True, header=None)
+
+# exclude lying for simplicity
+exclude_laying_test = y_test[0] != 6
+X_test = X_test.loc[exclude_laying_test].reset_index(drop=True)
+y_test = y_test.loc[exclude_laying_test].reset_index(drop=True)
+subject_test = subject_test.loc[exclude_laying_test].reset_index(drop=True)
+
+X_test_scaled = scalar.transform(X_test)
+
+# evaluate the model
+y_pred = svm_model.predict(X_test_scaled)
+
+print("Classification Report:\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+cm = confusion_matrix(y_test, y_pred)
+
+# visualize confusion matrix
+plt.figure(figsize=(8,6))
+plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+plt.title('Confusion Matrix')
+plt.colorbar()
+plt.xlabel('Predicted label')
+plt.ylabel('True label')
+plt.show()
