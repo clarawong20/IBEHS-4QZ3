@@ -1,3 +1,4 @@
+## RASPBERRY PI SCRIPT FOR REAL-TIME ACTIVITY RECOGNITION
 from sense_hat import SenseHat
 import joblib
 import numpy as np
@@ -21,7 +22,10 @@ colors = {
     "turn CW": [255, 255, 0]
 }
 
-WINDOW_SIZE = 10
+WINDOW_SIZE = 100
+STEP_SIZE = WINDOW_SIZE // 4  # 75% overlap
+sample_counter = 0 # counts number of samples to ensure step size
+
 window_ax = deque(maxlen=WINDOW_SIZE)
 window_ay = deque(maxlen=WINDOW_SIZE)
 window_az = deque(maxlen=WINDOW_SIZE)
@@ -29,7 +33,7 @@ window_mag = deque(maxlen=WINDOW_SIZE)
 
 # Feature extraction
 def compute_features():
-    """Compute statistics from the rolling window."""
+    """Compute statistics from the sliding window"""
     ax = np.array(window_ax)
     ay = np.array(window_ay)
     az = np.array(window_az)
@@ -62,14 +66,18 @@ last_prediction = None  # Track last activity
 while True:
     Ax, Ay, Az, A_mag = get_features()
 
-    # Add to rolling windows
+    # Add to sliding windows
     window_ax.append(Ax)
     window_ay.append(Ay)
     window_az.append(Az)
     window_mag.append(A_mag)
 
-    # Prediction only after window is full
-    if len(window_ax) == WINDOW_SIZE:
+    sample_counter += 1
+
+    # Prediction only after window is full and step size reached
+    if len(window_ax) == WINDOW_SIZE and sample_counter >= STEP_SIZE:
+        sample_counter = 0  # reset counter after prediction
+
         X = compute_features()
         X_scaled = scaler.transform(X)
         prediction = model.predict(X_scaled)[0]
@@ -83,7 +91,7 @@ while True:
             sense.clear(color)
             last_prediction = prediction
 
-    # Joystick stop
+    # Joystick press down to stop
     for e in sense.stick.get_events():
         if e.direction == "middle" and e.action == "pressed":
             sense.show_message("END", text_colour=[255, 255, 255])

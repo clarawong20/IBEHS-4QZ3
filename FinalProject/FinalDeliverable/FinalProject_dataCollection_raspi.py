@@ -1,3 +1,4 @@
+# RASPBERRY PI SCRIPT FOR DATA COLLECTION
 from sense_hat import SenseHat
 from datetime import datetime
 import joblib
